@@ -1,0 +1,1676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>OphthoSort Pro - AI Photo Organizer</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f2f2f7;
+            padding: 10px;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+            font-size: 16px;
+        }
+
+        @media (min-width: 768px) {
+            body {
+                padding: 20px;
+                font-size: 17px;
+            }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #007AFF;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #8e8e93;
+            margin-bottom: 20px;
+        }
+
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 30px 0;
+            position: relative;
+        }
+
+        .workflow-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 10%;
+            right: 10%;
+            height: 3px;
+            background: #e5e5ea;
+            z-index: 0;
+        }
+
+        .workflow-step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e5e5ea;
+            color: #8e8e93;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .workflow-step.active .step-circle {
+            background: #007AFF;
+            color: white;
+        }
+
+        .workflow-step.completed .step-circle {
+            background: #34C759;
+            color: white;
+        }
+
+        .step-label {
+            font-size: 14px;
+            color: #8e8e93;
+            font-weight: 600;
+        }
+
+        .workflow-step.active .step-label {
+            color: #007AFF;
+        }
+
+        .workflow-step.completed .step-label {
+            color: #34C759;
+        }
+
+        .alert {
+            background: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .alert.warning {
+            background: #fff3cd;
+            border-left-color: #ffc107;
+            color: #856404;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+            color: #155724;
+        }
+
+        .settings-panel {
+            background: #f9f9fb;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #e5e5ea;
+        }
+
+        .setting-row {
+            margin-bottom: 15px;
+        }
+
+        .setting-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .setting-value {
+            color: #007AFF;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .slider {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: #e5e5ea;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #007AFF;
+            cursor: pointer;
+        }
+
+        .upload-box {
+            border: 3px dashed #007AFF;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #f9f9fb;
+            margin: 20px 0;
+            cursor: pointer;
+        }
+
+        .upload-icon {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+
+        .btn-upload {
+            background: #007AFF;
+            color: white;
+            padding: 15px 40px;
+            border-radius: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .preview-item {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            background: #e5e5ea;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-number {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 3px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+
+        .btn-analyze {
+            background: #34C759;
+            color: white;
+            border: none;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            cursor: pointer;
+            width: 100%;
+            margin: 20px 0;
+        }
+
+        .btn-analyze:disabled {
+            background: #c7c7cc;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+        }
+
+        .message.success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+        }
+
+        .progress {
+            background: #e5e5ea;
+            height: 40px;
+            border-radius: 20px;
+            overflow: hidden;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress.show {
+            display: block;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007AFF, #34C759);
+            width: 0%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+
+        .step-section {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .step-section.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .instruction-banner {
+            background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: #007AFF;
+            color: white;
+        }
+
+        .btn-success {
+            background: #34C759;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #FF3B30;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #8E8E93;
+            color: white;
+        }
+
+        .patient-folder {
+            background: #f9f9fb;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border: 2px solid #e5e5ea;
+            position: relative;
+        }
+
+        .patient-folder.drop-target {
+            border-color: #34C759;
+            border-width: 3px;
+            background: linear-gradient(to bottom, #e8f5e9 0%, #f9f9fb 100%);
+            box-shadow: 0 0 0 4px rgba(52, 199, 89, 0.2);
+        }
+
+        .patient-folder.drop-target::before {
+            content: "📥 Drop photo here";
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #34C759;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 14px;
+            z-index: 100;
+            animation: pulse 0.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .folder-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .folder-left {
+            display: flex;
+            align-items: center;
+            flex: 1;
+        }
+
+        .folder-emoji {
+            font-size: 48px;
+            margin-right: 20px;
+        }
+
+        .folder-title-edit {
+            font-size: 24px;
+            font-weight: 700;
+            border: 2px solid transparent;
+            padding: 5px 10px;
+            border-radius: 8px;
+            background: transparent;
+            color: #1c1c1e;
+            min-width: 200px;
+        }
+
+        .folder-title-edit:focus {
+            outline: none;
+            border-color: #007AFF;
+            background: white;
+        }
+
+        .folder-title-edit.readonly {
+            pointer-events: none;
+        }
+
+        .folder-subtitle {
+            color: #8e8e93;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .folder-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .photo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .photo-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            cursor: grab;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .photo-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 2px solid #007AFF;
+        }
+
+        .photo-card:active {
+            cursor: grabbing;
+        }
+
+        .photo-card.dragging {
+            opacity: 0.4;
+            transform: scale(0.95);
+        }
+
+        .drag-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,122,255,0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .photo-card:hover .drag-hint {
+            opacity: 1;
+        }
+
+        .photo-img {
+            aspect-ratio: 1;
+            overflow: hidden;
+        }
+
+        .photo-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-label {
+            padding: 8px;
+            background: white;
+        }
+
+        .photo-label-input {
+            width: 100%;
+            border: 1px solid #e5e5ea;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #007AFF;
+        }
+
+        .photo-label-input:focus {
+            outline: none;
+            border-color: #007AFF;
+        }
+
+        .photo-date {
+            font-size: 10px;
+            color: #8e8e93;
+            margin-top: 4px;
+        }
+
+        .photo-exif-badge {
+            font-size: 9px;
+            background: #34C759;
+            color: white;
+            padding: 2px 5px;
+            border-radius: 4px;
+            margin-top: 2px;
+            display: inline-block;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .stat {
+            background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 800;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            opacity: 0.95;
+            margin-top: 5px;
+        }
+
+        .console {
+            background: #1c1c1e;
+            color: #00ff41;
+            padding: 20px;
+            border-radius: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 30px;
+            line-height: 1.6;
+        }
+
+        .console-line {
+            margin-bottom: 4px;
+        }
+
+        .console-line.header { color: #00d4ff; font-weight: 700; }
+        .console-line.success { color: #00ff41; }
+        .console-line.warning { color: #ffaa00; }
+        .console-line.error { color: #ff4444; }
+        .console-line.info { color: #00d4ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👁️ OphthoSort - Guided Workflow</h1>
+        <p class="subtitle">Step-by-step organization of ophthalmology photos</p>
+
+        <!-- Workflow Progress -->
+        <div class="workflow-steps">
+            <div class="workflow-step" id="step1-indicator">
+                <div class="step-circle">1</div>
+                <div class="step-label">Upload</div>
+            </div>
+            <div class="workflow-step" id="step2-indicator">
+                <div class="step-circle">2</div>
+                <div class="step-label">Analyze</div>
+            </div>
+            <div class="workflow-step" id="step3-indicator">
+                <div class="step-circle">3</div>
+                <div class="step-label">Match Names</div>
+            </div>
+            <div class="workflow-step" id="step4-indicator">
+                <div class="step-circle">4</div>
+                <div class="step-label">Review</div>
+            </div>
+            <div class="workflow-step" id="step5-indicator">
+                <div class="step-circle">5</div>
+                <div class="step-label">Export</div>
+            </div>
+        </div>
+
+        <!-- Step 1: Upload -->
+        <div id="step1" class="step-section active">
+            <div class="instruction-banner">
+                📤 Step 1: Upload Your Photos
+            </div>
+
+            <div class="alert">
+                <strong>📱 Works on Phone!</strong> Upload photos from your camera roll or take new photos directly. The AI will separate medical eye closeups from personal photos automatically. <strong>✓ Works offline</strong> after first load.
+            </div>
+
+            <div class="settings-panel">
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>Patient Separation Threshold</span>
+                        <span class="setting-value" id="thresholdValue">0.38</span>
+                    </div>
+                    <input type="range" id="thresholdSlider" class="slider" min="0.30" max="0.55" step="0.01" value="0.38">
+                </div>
+            </div>
+
+            <div class="upload-box" id="uploadBox">
+                <div class="upload-icon">📸</div>
+                <h3>Upload Your Photos</h3>
+                <p style="color: #8e8e93; margin: 10px 0; font-size: 14px;">Choose how you want to add photos</p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                    <button type="button" class="btn-upload" onclick="document.getElementById('cameraInput').click()" style="background: #007AFF;">
+                        📷 Camera
+                    </button>
+                    <button type="button" class="btn-upload" onclick="document.getElementById('fileInput').click()" style="background: #34C759;">
+                        🖼️ Library
+                    </button>
+                </div>
+                
+                <p style="color: #8e8e93; margin-top: 10px; font-size: 12px;">Desktop: Drag and drop also works</p>
+            </div>
+
+            <input type="file" id="cameraInput" accept="image/*" multiple capture="environment" style="display: none;">
+            <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
+
+            <div id="previewGrid" class="preview-grid"></div>
+
+            <button id="btnAnalyze" class="btn-analyze" disabled>
+                🔍 Continue to Analysis
+            </button>
+        </div>
+
+        <!-- Step 2: Analysis (automatic) -->
+        <div id="step2" class="step-section">
+            <div class="instruction-banner">
+                🤖 Step 2: Analyzing Photos...
+            </div>
+
+            <div id="progressBar" class="progress show">
+                <div id="progressFill" class="progress-fill">0%</div>
+            </div>
+
+            <div id="messageBox" class="message"></div>
+        </div>
+
+        <!-- Step 3: Match Names -->
+        <div id="step3" class="step-section">
+            <div class="instruction-banner">
+                📝 Step 3: Match Patient Names
+            </div>
+
+            <div class="alert">
+                <strong>Smart Name Detection!</strong><br>
+                • OCR extracted names from screen photos<br>
+                • Match each name to the correct patient group<br>
+                • Edit names if OCR made mistakes<br>
+                • Name card photos will be saved with each patient
+            </div>
+
+            <div class="stats">
+                <div class="stat" style="background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);">
+                    <div class="stat-value" id="nameCardsCount">0</div>
+                    <div class="stat-label">Name Cards Found</div>
+                </div>
+                <div class="stat" style="background: linear-gradient(135deg, #34C759 0%, #2fb34d 100%);">
+                    <div class="stat-value" id="patientCountStep3">0</div>
+                    <div class="stat-label">Patient Groups</div>
+                </div>
+            </div>
+
+            <h3 style="margin: 25px 0 15px 0; font-size: 18px;">📄 Name Cards (Drag to Patient or Select)</h3>
+            <div id="nameCardsContainer" style="margin-bottom: 30px;"></div>
+
+            <h3 style="margin: 25px 0 15px 0; font-size: 18px;">👥 Patient Groups</h3>
+            <div id="patientGroupsContainer"></div>
+
+            <div class="action-buttons" style="margin-top: 30px;">
+                <button class="btn btn-success" onclick="goToStep4()">
+                    ✅ Continue to Review
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 4: Review & Edit -->
+        <div id="step4" class="step-section">
+            <div class="instruction-banner">
+                👀 Step 4: Review & Edit
+            </div>
+
+            <div class="alert success">
+                <strong>Final Review:</strong><br>
+                • Check all patient folders have correct names<br>
+                • Edit patient names if needed (click to edit)<br>
+                • Drag photos between folders if needed<br>
+                • Adjust timeline labels if needed<br>
+                • When satisfied, continue to export
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="createNewPatientFolder()">
+                    ➕ Add New Patient Folder
+                </button>
+                <button class="btn btn-success" onclick="goToStep5()">
+                    ✅ Continue to Export
+                </button>
+            </div>
+
+            <div id="step4Container"></div>
+        </div>
+
+        <!-- Step 5: Export -->
+        <div id="step5" class="step-section">
+            <div class="instruction-banner">
+                💾 Step 5: Export Your Results
+            </div>
+
+            <div class="alert success">
+                <strong>All Done!</strong><br>
+                Your photos have been organized by patient with proper timelines. Click below to export the results.
+            </div>
+
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-value" id="totalPhotosStep5">0</div>
+                    <div class="stat-label">Total Medical Photos</div>
+                </div>
+                <div class="stat" style="background: linear-gradient(135deg, #34C759 0%, #2fb34d 100%);">
+                    <div class="stat-value" id="patientCountStep5">0</div>
+                    <div class="stat-label">Patient Folders</div>
+                </div>
+            </div>
+
+            <div id="step5Container"></div>
+
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="downloadZIP()" style="font-size: 16px; padding: 18px 24px;">
+                    📦 Download Organized Photos (ZIP)
+                </button>
+                <button class="btn btn-primary" onclick="exportResults()">
+                    💾 Export List (JSON)
+                </button>
+                <button class="btn btn-secondary" onclick="resetAll()">
+                    🔄 Start Over
+                </button>
+            </div>
+        </div>
+
+        <div id="console" class="console">
+            <div class="console-line header">🖥️ DEBUG CONSOLE</div>
+        </div>
+    </div>
+
+    <script>
+        let photos = [];
+        let modelsLoaded = false;
+        let matchThreshold = 0.38;
+        let patients = [];
+        let personalPhotos = [];
+        let nameCards = []; // Photos with text/names
+        let nextPatientId = 1;
+        let currentStep = 1;
+
+        document.getElementById('thresholdSlider').addEventListener('input', function(e) {
+            matchThreshold = parseFloat(e.target.value);
+            document.getElementById('thresholdValue').textContent = matchThreshold.toFixed(2);
+        });
+
+        function goToStep(step) {
+            // Hide all steps
+            document.querySelectorAll('.step-section').forEach(s => s.classList.remove('active'));
+            
+            // Update indicators
+            document.querySelectorAll('.workflow-step').forEach((s, i) => {
+                s.classList.remove('active', 'completed');
+                if (i + 1 < step) {
+                    s.classList.add('completed');
+                } else if (i + 1 === step) {
+                    s.classList.add('active');
+                }
+            });
+            
+            // Show current step
+            document.getElementById(`step${step}`).classList.add('active');
+            currentStep = step;
+            
+            log(`Moving to Step ${step}`, 'info');
+        }
+
+        function log(msg, type = 'info') {
+            console.log(msg);
+            const consoleDiv = document.getElementById('console');
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            line.textContent = '▸ ' + msg;
+            consoleDiv.appendChild(line);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+
+        function showMessage(msg, type = 'info') {
+            const box = document.getElementById('messageBox');
+            box.textContent = msg;
+            box.className = `message ${type} show`;
+        }
+
+        function setProgress(pct, txt) {
+            const fill = document.getElementById('progressFill');
+            fill.style.width = pct + '%';
+            fill.textContent = txt || (pct + '%');
+        }
+
+        async function loadAI() {
+            try {
+                log('Loading AI models...', 'info');
+                const URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(URL);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(URL);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(URL);
+                
+                modelsLoaded = true;
+                log('✓ AI Ready', 'success');
+                
+            } catch (e) {
+                log('ERROR: ' + e.message, 'error');
+            }
+        }
+
+        function extractPatientName(ocrText) {
+            // Clean up OCR text
+            let text = ocrText.trim();
+            
+            // Remove common OCR noise
+            text = text.replace(/[|\\/_\-\*\+]/g, ' ');
+            text = text.replace(/\s+/g, ' ');
+            
+            // Get first meaningful line (usually the name)
+            const lines = text.split('\n').filter(line => line.trim().length > 2);
+            if (lines.length === 0) return 'Unknown';
+            
+            // Take first line, limit length
+            let name = lines[0].trim();
+            if (name.length > 50) {
+                name = name.substring(0, 50);
+            }
+            
+            // Remove numbers and special chars at start/end
+            name = name.replace(/^[\d\s\W]+/, '').replace(/[\d\s\W]+$/, '');
+            
+            return name || 'Unknown';
+        }
+
+        function extractEXIFDate(img) {
+            return new Promise((resolve) => {
+                EXIF.getData(img, function() {
+                    const dateTimeOriginal = EXIF.getTag(this, 'DateTimeOriginal');
+                    const dateTime = EXIF.getTag(this, 'DateTime');
+                    
+                    const exifDate = dateTimeOriginal || dateTime;
+                    
+                    if (exifDate) {
+                        const parts = exifDate.split(' ');
+                        const datePart = parts[0].replace(/:/g, '-');
+                        const timePart = parts[1] || '00:00:00';
+                        const isoString = datePart + 'T' + timePart;
+                        
+                        try {
+                            const date = new Date(isoString);
+                            if (!isNaN(date.getTime())) {
+                                resolve({ date: date, hasEXIF: true });
+                                return;
+                            }
+                        } catch (e) {}
+                    }
+                    
+                    resolve({ date: null, hasEXIF: false });
+                });
+            });
+        }
+
+        async function handleFiles(files) {
+            if (!files || files.length === 0) return;
+
+            log('Loading files...', 'info');
+            
+            photos = [];
+            const grid = document.getElementById('previewGrid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                try {
+                    const result = await readFile(file);
+                    const exifResult = await extractEXIFDate(result.image);
+                    
+                    let actualDate;
+                    let hasEXIF = false;
+                    
+                    if (exifResult.hasEXIF && exifResult.date) {
+                        actualDate = exifResult.date;
+                        hasEXIF = true;
+                    } else {
+                        actualDate = new Date(file.lastModified);
+                    }
+                    
+                    photos.push({
+                        id: `photo_${Date.now()}_${i}`,
+                        file: file,
+                        url: result.dataUrl,
+                        img: result.image,
+                        name: file.name,
+                        time: actualDate.getTime(),
+                        date: actualDate,
+                        hasEXIF: hasEXIF
+                    });
+
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.innerHTML = `
+                        <img src="${result.dataUrl}">
+                        <div class="preview-number">${i + 1}</div>
+                    `;
+                    grid.appendChild(div);
+                    
+                } catch (err) {
+                    log(`Failed: ${file.name}`, 'error');
+                }
+            }
+
+            document.getElementById('btnAnalyze').disabled = (photos.length === 0);
+            log(`✓ ${photos.length} photos loaded`, 'success');
+        }
+
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            await handleFiles(e.target.files);
+        });
+
+        document.getElementById('cameraInput').addEventListener('change', async function(e) {
+            await handleFiles(e.target.files);
+        });
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = () => resolve({ dataUrl: e.target.result, image: img });
+                    img.onerror = () => reject(new Error('Failed'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('Failed'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        document.getElementById('btnAnalyze').addEventListener('click', async function() {
+            if (!modelsLoaded || photos.length === 0) return;
+
+            goToStep(2);
+            this.disabled = true;
+
+            try {
+                log('===========================================', 'header');
+                log(`ANALYSIS START (Threshold: ${matchThreshold.toFixed(2)})`, 'header');
+                log('===========================================', 'header');
+                
+                setProgress(5, 'Detecting faces...');
+
+                const eyePhotos = [];
+                personalPhotos = [];
+                nameCards = []; // Reset name cards
+
+                for (let i = 0; i < photos.length; i++) {
+                    const p = photos[i];
+                    setProgress(10 + (i / photos.length) * 30, `Detecting faces ${i+1}/${photos.length}`);
+
+                    try {
+                        const det = await faceapi
+                            .detectSingleFace(p.img)
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
+
+                        if (det && det.descriptor) {
+                            const box = det.detection.box;
+                            const faceRatio = box.width / p.img.width;
+                            
+                            if (faceRatio > 0.30) {
+                                eyePhotos.push({ ...p, desc: det.descriptor });
+                            } else {
+                                personalPhotos.push(p);
+                            }
+                        } else {
+                            // No face detected - might be a name card
+                            nameCards.push(p);
+                        }
+                    } catch (err) {
+                        // Error detecting - might be name card
+                        nameCards.push(p);
+                    }
+                }
+
+                log(`${eyePhotos.length} eye photos, ${nameCards.length} potential name cards, ${personalPhotos.length} personal`, 'success');
+
+                // Run OCR on name cards
+                setProgress(45, 'Reading name cards...');
+                for (let i = 0; i < nameCards.length; i++) {
+                    setProgress(45 + (i / nameCards.length) * 15, `OCR ${i+1}/${nameCards.length}`);
+                    try {
+                        const result = await Tesseract.recognize(
+                            nameCards[i].url,
+                            'eng',
+                            { 
+                                logger: () => {} // Suppress verbose logging
+                            }
+                        );
+                        nameCards[i].ocrText = result.data.text.trim();
+                        nameCards[i].patientName = extractPatientName(result.data.text);
+                        log(`OCR: "${nameCards[i].patientName}"`, 'info');
+                    } catch (err) {
+                        nameCards[i].ocrText = '';
+                        nameCards[i].patientName = 'Unknown';
+                        log(`OCR failed for photo ${i+1}`, 'warning');
+                    }
+                }
+
+                log(`${eyePhotos.length} eye, ${personalPhotos.length} personal`, 'success');
+
+                // Group
+                setProgress(60, 'Grouping patients...');
+                
+                const groups = [];
+                const used = new Set();
+
+                for (let i = 0; i < eyePhotos.length; i++) {
+                    if (used.has(i)) continue;
+
+                    const grp = [eyePhotos[i]];
+                    used.add(i);
+
+                    for (let j = i + 1; j < eyePhotos.length; j++) {
+                        if (used.has(j)) continue;
+
+                        const dist = faceapi.euclideanDistance(
+                            eyePhotos[i].desc,
+                            eyePhotos[j].desc
+                        );
+
+                        if (dist < matchThreshold) {
+                            grp.push(eyePhotos[j]);
+                            used.add(j);
+                        }
+                    }
+
+                    groups.push(grp);
+                }
+
+                log(`${groups.length} patients identified`, 'success');
+
+                // Build patient objects
+                setProgress(85, 'Building timelines...');
+                patients = groups.map((grp, idx) => {
+                    const sorted = grp.sort((a, b) => a.time - b.time);
+                    const baseDate = sorted[0].date;
+                    
+                    const photoData = sorted.map((p) => {
+                        const days = Math.floor((p.date - baseDate) / 86400000);
+                        let label = days === 0 ? 'Pre-op' : `Day ${days} Post-op`;
+                        
+                        return {
+                            ...p,
+                            daysSinceBaseline: days,
+                            label: label
+                        };
+                    });
+
+                    return {
+                        id: `patient_${nextPatientId++}`,
+                        name: `Patient ${idx + 1}`,
+                        photos: photoData
+                    };
+                });
+
+                setProgress(100, 'Complete!');
+                
+                log('===========================================', 'header');
+                log('✓ ANALYSIS COMPLETE', 'success');
+                log('===========================================', 'header');
+                
+                // Move to step 3
+                setTimeout(() => {
+                    renderStep3();
+                    goToStep(3);
+                }, 1000);
+
+            } catch (err) {
+                log('ERROR: ' + err.message, 'error');
+                console.error(err);
+            }
+        });
+
+        function renderStep3() {
+            // Update stats
+            document.getElementById('nameCardsCount').textContent = nameCards.length;
+            document.getElementById('patientCountStep3').textContent = patients.length;
+
+            // Render name cards
+            const nameCardsContainer = document.getElementById('nameCardsContainer');
+            nameCardsContainer.innerHTML = '';
+
+            if (nameCards.length === 0) {
+                nameCardsContainer.innerHTML = `
+                    <div class="alert" style="background: #fff3cd; border-left-color: #ffc107;">
+                        <strong>No name cards detected.</strong><br>
+                        No text-heavy photos were found. You can manually name patients in the next step.
+                    </div>
+                `;
+            } else {
+                nameCards.forEach((card, idx) => {
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'patient-folder';
+                    cardDiv.style.display = 'flex';
+                    cardDiv.style.alignItems = 'center';
+                    cardDiv.style.gap = '15px';
+                    cardDiv.style.marginBottom = '15px';
+                    
+                    cardDiv.innerHTML = `
+                        <div style="flex-shrink: 0;">
+                            <img src="${card.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px;">
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 14px; color: #8e8e93; margin-bottom: 5px;">Name Card ${idx + 1}</div>
+                            <input type="text" value="${card.patientName}" 
+                                   onchange="nameCards[${idx}].patientName = this.value"
+                                   style="width: 100%; max-width: 300px; padding: 8px; border: 2px solid #007AFF; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                            <div style="font-size: 11px; color: #8e8e93; margin-top: 5px;">OCR: "${card.ocrText.substring(0, 50)}${card.ocrText.length > 50 ? '...' : ''}"</div>
+                        </div>
+                        <div style="flex-shrink: 0;">
+                            <select onchange="assignNameToPatient(${idx}, this.value)" 
+                                    style="padding: 10px; border: 2px solid #34C759; border-radius: 8px; font-size: 14px; font-weight: 600; min-width: 150px;">
+                                <option value="">Assign to...</option>
+                                ${patients.map((p, i) => `<option value="${i}">Patient ${i + 1}</option>`).join('')}
+                            </select>
+                        </div>
+                    `;
+                    nameCardsContainer.appendChild(cardDiv);
+                });
+            }
+
+            // Render patient groups
+            const patientGroupsContainer = document.getElementById('patientGroupsContainer');
+            patientGroupsContainer.innerHTML = '';
+
+            patients.forEach((patient, idx) => {
+                const folderDiv = document.createElement('div');
+                folderDiv.className = 'patient-folder';
+                folderDiv.style.marginBottom = '15px';
+                
+                folderDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="folder-emoji">📁</div>
+                        <div>
+                            <div style="font-size: 20px; font-weight: 700;">${patient.name}</div>
+                            <div style="font-size: 14px; color: #8e8e93;">${patient.photos.length} photos</div>
+                        </div>
+                    </div>
+                `;
+                patientGroupsContainer.appendChild(folderDiv);
+            });
+        }
+
+        function assignNameToPatient(nameCardIdx, patientIdx) {
+            if (patientIdx === '') return;
+            
+            const nameCard = nameCards[nameCardIdx];
+            const patient = patients[parseInt(patientIdx)];
+            
+            // Assign name to patient
+            patient.name = nameCard.patientName;
+            
+            // Add name card photo to patient's photos
+            patient.photos.unshift({
+                ...nameCard,
+                label: 'Name Card',
+                daysSinceBaseline: -1,
+                isNameCard: true
+            });
+            
+            // Remove from nameCards array
+            nameCards.splice(nameCardIdx, 1);
+            
+            log(`✓ Assigned "${patient.name}" to Patient ${parseInt(patientIdx) + 1}`, 'success');
+            
+            // Re-render
+            renderStep3();
+        }
+
+        function goToStep4() {
+            renderStep4();
+            goToStep(4);
+        }
+
+        function renderStep4() {
+            const container = document.getElementById('step4Container');
+            container.innerHTML = '';
+
+            patients.forEach(patient => {
+                const folder = createFolderElement(patient, true); // true = editable
+                container.appendChild(folder);
+            });
+        }
+
+        function goToStep5() {
+            renderStep5();
+            goToStep(5);
+        }
+
+        function renderStep5() {
+            const totalPhotos = patients.reduce((sum, p) => sum + p.photos.length, 0);
+            document.getElementById('totalPhotosStep5').textContent = totalPhotos;
+            document.getElementById('patientCountStep5').textContent = patients.length;
+
+            const container = document.getElementById('step5Container');
+            container.innerHTML = '';
+
+            patients.forEach(patient => {
+                const folder = createFolderElement(patient, false); // false = readonly
+                container.appendChild(folder);
+            });
+        }
+
+        function createFolderElement(patient, editable) {
+            const folder = document.createElement('div');
+            folder.className = 'patient-folder';
+            folder.dataset.patientId = patient.id;
+
+            if (editable) {
+                folder.addEventListener('dragover', handleDragOver);
+                folder.addEventListener('drop', handleDrop);
+                folder.addEventListener('dragleave', handleDragLeave);
+            }
+
+            const photosHTML = patient.photos.map(photo => {
+                const exifBadge = photo.hasEXIF ? '<div class="photo-exif-badge">EXIF ✓</div>' : '';
+                const draggable = editable ? 'draggable="true"' : '';
+                const dragHint = editable ? '<div class="drag-hint">Drag to move</div>' : '';
+                
+                return `
+                    <div class="photo-card" ${draggable} data-photo-id="${photo.id}" data-patient-id="${patient.id}">
+                        ${dragHint}
+                        <div class="photo-img">
+                            <img src="${photo.url}" draggable="false">
+                        </div>
+                        <div class="photo-label">
+                            <input type="text" class="photo-label-input" value="${photo.label}" 
+                                   ${editable ? '' : 'readonly'}
+                                   onchange="updatePhotoLabel('${patient.id}', '${photo.id}', this.value)"
+                                   onclick="event.stopPropagation()">
+                            <div class="photo-date">${photo.date.toLocaleDateString()} ${photo.date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                            ${exifBadge}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const readonlyClass = editable ? '' : 'readonly';
+            const deleteBtn = !patient.isPersonal && editable ? 
+                `<button class="btn btn-danger" onclick="deleteFolder('${patient.id}'); event.stopPropagation();">🗑️ Delete</button>` : '';
+
+            folder.innerHTML = `
+                <div class="folder-header">
+                    <div class="folder-left">
+                        <div class="folder-emoji">${patient.isPersonal ? '🏖️' : '📁'}</div>
+                        <div>
+                            <input type="text" class="folder-title-edit ${readonlyClass}" value="${patient.name}" 
+                                   ${editable ? '' : 'readonly'}
+                                   onchange="updatePatientName('${patient.id}', this.value)"
+                                   onclick="event.stopPropagation()">
+                            <div class="folder-subtitle">${patient.photos.length} photos</div>
+                        </div>
+                    </div>
+                    <div class="folder-actions">
+                        ${deleteBtn}
+                    </div>
+                </div>
+                <div class="photo-grid">
+                    ${photosHTML}
+                </div>
+            `;
+
+            if (editable) {
+                folder.querySelectorAll('.photo-card[draggable="true"]').forEach(card => {
+                    card.addEventListener('dragstart', handleDragStart);
+                    card.addEventListener('dragend', handleDragEnd);
+                });
+            }
+
+            return folder;
+        }
+
+        let draggedPhoto = null;
+        let draggedFromPatient = null;
+
+        function handleDragStart(e) {
+            draggedPhoto = e.currentTarget.dataset.photoId;
+            draggedFromPatient = e.currentTarget.dataset.patientId;
+            e.currentTarget.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedPhoto);
+        }
+
+        function handleDragEnd(e) {
+            e.currentTarget.classList.remove('dragging');
+            document.querySelectorAll('.patient-folder').forEach(folder => {
+                folder.classList.remove('drop-target');
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.dataTransfer.dropEffect = 'move';
+            
+            let folder = e.target;
+            while (folder && !folder.classList.contains('patient-folder')) {
+                folder = folder.parentElement;
+            }
+            if (folder) {
+                folder.classList.add('drop-target');
+            }
+        }
+
+        function handleDragLeave(e) {
+            e.stopPropagation();
+            
+            let folder = e.target;
+            while (folder && !folder.classList.contains('patient-folder')) {
+                folder = folder.parentElement;
+            }
+            
+            if (folder && !folder.contains(e.relatedTarget)) {
+                folder.classList.remove('drop-target');
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            let folder = e.target;
+            while (folder && !folder.classList.contains('patient-folder')) {
+                folder = folder.parentElement;
+            }
+            
+            if (folder) {
+                folder.classList.remove('drop-target');
+                const targetPatientId = folder.dataset.patientId;
+                
+                if (draggedPhoto && targetPatientId && draggedFromPatient !== targetPatientId) {
+                    movePhoto(draggedFromPatient, targetPatientId, draggedPhoto);
+                    log(`Moved photo to ${targetPatientId}`, 'success');
+                }
+            }
+            
+            draggedPhoto = null;
+            draggedFromPatient = null;
+        }
+
+        function movePhoto(fromId, toId, photoId) {
+            log(`Moving photo from ${fromId} to ${toId}`, 'info');
+            
+            // Case 1: Moving FROM personal photos TO a patient folder
+            if (fromId === 'personal') {
+                const photoIndex = personalPhotos.findIndex(p => p.id === photoId);
+                if (photoIndex === -1) {
+                    log('Photo not found in personal photos', 'error');
+                    return;
+                }
+                
+                const photo = personalPhotos.splice(photoIndex, 1)[0];
+                const toPatient = patients.find(p => p.id === toId);
+                if (!toPatient) {
+                    log('Target patient not found', 'error');
+                    return;
+                }
+                
+                toPatient.photos.push(photo);
+                
+                // Re-sort and relabel
+                toPatient.photos.sort((a, b) => a.time - b.time);
+                const newBase = toPatient.photos[0].time;
+                toPatient.photos.forEach(p => {
+                    const d = Math.floor((p.time - newBase) / 86400000);
+                    p.daysSinceBaseline = d;
+                    p.label = d === 0 ? 'Pre-op' : `Day ${d} Post-op`;
+                });
+                
+                log(`✓ Moved photo from personal to ${toPatient.name}`, 'success');
+                
+                if (currentStep === 3) renderStep3();
+                else if (currentStep === 4) renderStep4();
+                return;
+            }
+            
+            // Case 2: Moving TO personal photos FROM a patient folder
+            if (toId === 'personal') {
+                const fromPatient = patients.find(p => p.id === fromId);
+                if (!fromPatient) {
+                    log('Source patient not found', 'error');
+                    return;
+                }
+                
+                const photoIndex = fromPatient.photos.findIndex(p => p.id === photoId);
+                if (photoIndex === -1) {
+                    log('Photo not found in patient folder', 'error');
+                    return;
+                }
+                
+                const photo = fromPatient.photos.splice(photoIndex, 1)[0];
+                
+                // Remove timeline info when moving to personal
+                photo.label = 'Personal';
+                photo.daysSinceBaseline = null;
+                
+                personalPhotos.push(photo);
+                
+                log(`✓ Moved photo from ${fromPatient.name} to personal`, 'success');
+                
+                if (currentStep === 3) renderStep3();
+                else if (currentStep === 4) renderStep4();
+                return;
+            }
+            
+            // Case 3: Moving BETWEEN patient folders
+            const fromPatient = patients.find(p => p.id === fromId);
+            const toPatient = patients.find(p => p.id === toId);
+            
+            if (!fromPatient || !toPatient) {
+                log('Patient folder not found', 'error');
+                return;
+            }
+            
+            const photoIndex = fromPatient.photos.findIndex(p => p.id === photoId);
+            if (photoIndex === -1) {
+                log('Photo not found', 'error');
+                return;
+            }
+            
+            const photo = fromPatient.photos.splice(photoIndex, 1)[0];
+            toPatient.photos.push(photo);
+            
+            // Re-sort and relabel
+            toPatient.photos.sort((a, b) => a.time - b.time);
+            const newBase = toPatient.photos[0].time;
+            toPatient.photos.forEach(p => {
+                const d = Math.floor((p.time - newBase) / 86400000);
+                p.daysSinceBaseline = d;
+                p.label = d === 0 ? 'Pre-op' : `Day ${d} Post-op`;
+            });
+            
+            log(`✓ Moved photo from ${fromPatient.name} to ${toPatient.name}`, 'success');
+            
+            if (currentStep === 3) renderStep3();
+            else if (currentStep === 4) renderStep4();
+        }
+
+        function updatePhotoLabel(patientId, photoId, newLabel) {
+            const patient = patients.find(p => p.id === patientId);
+            if (!patient) return;
+            
+            const photo = patient.photos.find(p => p.id === photoId);
+            if (photo) {
+                photo.label = newLabel;
+                log(`Updated label: ${newLabel}`, 'success');
+            }
+        }
+
+        function updatePatientName(patientId, newName) {
+            const patient = patients.find(p => p.id === patientId);
+            if (patient) {
+                patient.name = newName;
+                log(`Renamed to: ${newName}`, 'success');
+            }
+        }
+
+        function deleteFolder(patientId) {
+            if (!confirm('Delete this patient folder?')) return;
+            
+            patients = patients.filter(p => p.id !== patientId);
+            if (currentStep === 3) renderStep3();
+            else if (currentStep === 4) renderStep4();
+            log(`Deleted folder`, 'warning');
+        }
+
+        function createNewPatientFolder() {
+            patients.push({
+                id: `patient_${nextPatientId++}`,
+                name: `New Patient`,
+                photos: []
+            });
+            renderStep4();
+            log('Created new folder', 'success');
+        }
+
+        function exportResults() {
+            const output = {
+                exportDate: new Date().toISOString(),
+                patients: patients.map(p => ({
+                    name: p.name,
+                    photoCount: p.photos.length,
+                    photos: p.photos.map(photo => ({
+                        originalName: photo.name,
+                        label: photo.label,
+                        captureDate: photo.date.toISOString(),
+                        hasEXIF: photo.hasEXIF || false,
+                        daysSinceBaseline: photo.daysSinceBaseline
+                    }))
+                }))
+            };
+            
+            const blob = new Blob([JSON.stringify(output, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ophtho-export-${Date.now()}.json`;
+            a.click();
+            
+            log('✓ Exported JSON', 'success');
+            alert('✅ Results exported successfully!');
+        }
+
+        async function downloadZIP() {
+            if (!window.JSZip) {
+                alert('❌ ZIP library not loaded. Please refresh the page.');
+                return;
+            }
+
+            try {
+                log('Creating ZIP file...', 'info');
+                showMessage('Creating organized photo folders...', 'info');
+
+                const zip = new JSZip();
+                let fileCount = 0;
+
+                // Create folders for each patient
+                for (const patient of patients) {
+                    // Clean patient name for folder (remove invalid chars)
+                    const folderName = patient.name.replace(/[<>:"/\\|?*]/g, '_');
+                    const patientFolder = zip.folder(folderName);
+
+                    // Add each photo to the patient folder
+                    for (const photo of patient.photos) {
+                        // Create filename: Label_OriginalName
+                        const safeLabel = photo.label.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+                        const filename = `${safeLabel}_${photo.name}`;
+
+                        // Fetch the image as blob
+                        const response = await fetch(photo.url);
+                        const blob = await response.blob();
+
+                        // Add to ZIP
+                        patientFolder.file(filename, blob);
+                        fileCount++;
+
+                        log(`Added: ${folderName}/${filename}`, 'info');
+                    }
+                }
+
+                showMessage(`Packaging ${fileCount} photos...`, 'info');
+                log(`Generating ZIP with ${fileCount} files...`, 'info');
+
+                // Generate ZIP file
+                const zipBlob = await zip.generateAsync({ 
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 }
+                }, function updateProgress(metadata) {
+                    const percent = metadata.percent.toFixed(0);
+                    showMessage(`Compressing... ${percent}%`, 'info');
+                });
+
+                // Download ZIP
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `OphthoSort_Organized_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                log('✓ ZIP downloaded successfully!', 'success');
+                showMessage('✅ Download complete! Unzip to see organized folders.', 'success');
+                
+                setTimeout(() => {
+                    alert(`✅ Success!\n\n${fileCount} photos organized into ${patients.length} patient folders.\n\nUnzip the downloaded file to see your organized photos!`);
+                }, 500);
+
+            } catch (error) {
+                log('ERROR creating ZIP: ' + error.message, 'error');
+                alert('❌ Error creating ZIP file. Please try again.');
+                console.error(error);
+            }
+        }
+
+        function resetAll() {
+            if (!confirm('Start over? All work will be lost.')) return;
+            
+            photos = [];
+            patients = [];
+            personalPhotos = [];
+            nameCards = [];
+            nextPatientId = 1;
+            document.getElementById('previewGrid').innerHTML = '';
+            document.getElementById('btnAnalyze').disabled = true;
+            document.getElementById('fileInput').value = '';
+            goToStep(1);
+            log('Reset complete', 'info');
+        }
+
+        window.addEventListener('load', () => {
+            log('OphthoSort Guided Workflow initialized', 'info');
+            loadAI();
+        });
+    </script>
+</body>
+</html>
