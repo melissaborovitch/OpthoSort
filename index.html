@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -10,6 +10,8 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
     <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -619,11 +621,11 @@
             </div>
             <div class="workflow-step" id="step3-indicator">
                 <div class="step-circle">3</div>
-                <div class="step-label">Review Personal</div>
+                <div class="step-label">Match Names</div>
             </div>
             <div class="workflow-step" id="step4-indicator">
                 <div class="step-circle">4</div>
-                <div class="step-label">Name Patients</div>
+                <div class="step-label">Review</div>
             </div>
             <div class="workflow-step" id="step5-indicator">
                 <div class="step-circle">5</div>
@@ -691,55 +693,57 @@
             <div id="messageBox" class="message"></div>
         </div>
 
-        <!-- Step 3: Review Personal Photos -->
+        <!-- Step 3: Match Names -->
         <div id="step3" class="step-section">
             <div class="instruction-banner">
-                🏖️ Step 3: Review Personal/Vacation Photos
+                📝 Step 3: Match Patient Names
             </div>
 
-            <div class="alert warning">
-                <strong>Instructions:</strong><br>
-                • Review the photos below marked as "Personal/Vacation"<br>
-                • If any medical photos were mis-classified, drag them to a patient folder<br>
-                • When satisfied, click "Confirm & Delete Personal Photos" to remove them<br>
-                • Or click "Keep Personal Photos" if you want to preserve them
+            <div class="alert">
+                <strong>Smart Name Detection!</strong><br>
+                • OCR extracted names from screen photos<br>
+                • Match each name to the correct patient group<br>
+                • Edit names if OCR made mistakes<br>
+                • Name card photos will be saved with each patient
             </div>
 
             <div class="stats">
-                <div class="stat" style="background: linear-gradient(135deg, #FF9500 0%, #FF6B00 100%);">
-                    <div class="stat-value" id="personalCount">0</div>
-                    <div class="stat-label">Personal Photos to Review</div>
+                <div class="stat" style="background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);">
+                    <div class="stat-value" id="nameCardsCount">0</div>
+                    <div class="stat-label">Name Cards Found</div>
                 </div>
                 <div class="stat" style="background: linear-gradient(135deg, #34C759 0%, #2fb34d 100%);">
                     <div class="stat-value" id="patientCountStep3">0</div>
-                    <div class="stat-label">Patient Folders</div>
+                    <div class="stat-label">Patient Groups</div>
                 </div>
             </div>
 
-            <div id="step3Container"></div>
+            <h3 style="margin: 25px 0 15px 0; font-size: 18px;">📄 Name Cards (Drag to Patient or Select)</h3>
+            <div id="nameCardsContainer" style="margin-bottom: 30px;"></div>
 
-            <div class="action-buttons">
-                <button class="btn btn-danger" onclick="confirmAndDeletePersonal()">
-                    🗑️ Confirm & Delete Personal Photos
-                </button>
-                <button class="btn btn-success" onclick="keepPersonalPhotos()">
-                    ✅ Keep Personal Photos & Continue
+            <h3 style="margin: 25px 0 15px 0; font-size: 18px;">👥 Patient Groups</h3>
+            <div id="patientGroupsContainer"></div>
+
+            <div class="action-buttons" style="margin-top: 30px;">
+                <button class="btn btn-success" onclick="goToStep4()">
+                    ✅ Continue to Review
                 </button>
             </div>
         </div>
 
-        <!-- Step 4: Name Patients -->
+        <!-- Step 4: Review & Edit -->
         <div id="step4" class="step-section">
             <div class="instruction-banner">
-                📝 Step 4: Name Your Patient Folders
+                👀 Step 4: Review & Edit
             </div>
 
             <div class="alert success">
-                <strong>Instructions:</strong><br>
-                • Click on each patient folder name to edit it<br>
-                • Enter the patient's real name (e.g., "Smith, John")<br>
-                • You can also adjust photo labels and drag photos between folders if needed<br>
-                • When done, click "Continue to Export"
+                <strong>Final Review:</strong><br>
+                • Check all patient folders have correct names<br>
+                • Edit patient names if needed (click to edit)<br>
+                • Drag photos between folders if needed<br>
+                • Adjust timeline labels if needed<br>
+                • When satisfied, continue to export
             </div>
 
             <div class="action-buttons">
@@ -779,8 +783,11 @@
             <div id="step5Container"></div>
 
             <div class="action-buttons">
-                <button class="btn btn-success" onclick="exportResults()">
-                    💾 Export Results (JSON)
+                <button class="btn btn-success" onclick="downloadZIP()" style="font-size: 16px; padding: 18px 24px;">
+                    📦 Download Organized Photos (ZIP)
+                </button>
+                <button class="btn btn-primary" onclick="exportResults()">
+                    💾 Export List (JSON)
                 </button>
                 <button class="btn btn-secondary" onclick="resetAll()">
                     🔄 Start Over
@@ -799,6 +806,7 @@
         let matchThreshold = 0.38;
         let patients = [];
         let personalPhotos = [];
+        let nameCards = []; // Photos with text/names
         let nextPatientId = 1;
         let currentStep = 1;
 
@@ -865,6 +873,30 @@
             } catch (e) {
                 log('ERROR: ' + e.message, 'error');
             }
+        }
+
+        function extractPatientName(ocrText) {
+            // Clean up OCR text
+            let text = ocrText.trim();
+            
+            // Remove common OCR noise
+            text = text.replace(/[|\\/_\-\*\+]/g, ' ');
+            text = text.replace(/\s+/g, ' ');
+            
+            // Get first meaningful line (usually the name)
+            const lines = text.split('\n').filter(line => line.trim().length > 2);
+            if (lines.length === 0) return 'Unknown';
+            
+            // Take first line, limit length
+            let name = lines[0].trim();
+            if (name.length > 50) {
+                name = name.substring(0, 50);
+            }
+            
+            // Remove numbers and special chars at start/end
+            name = name.replace(/^[\d\s\W]+/, '').replace(/[\d\s\W]+$/, '');
+            
+            return name || 'Unknown';
         }
 
         function extractEXIFDate(img) {
@@ -986,10 +1018,11 @@
 
                 const eyePhotos = [];
                 personalPhotos = [];
+                nameCards = []; // Reset name cards
 
                 for (let i = 0; i < photos.length; i++) {
                     const p = photos[i];
-                    setProgress(10 + (i / photos.length) * 40, `${i+1}/${photos.length}`);
+                    setProgress(10 + (i / photos.length) * 30, `Detecting faces ${i+1}/${photos.length}`);
 
                     try {
                         const det = await faceapi
@@ -1007,10 +1040,36 @@
                                 personalPhotos.push(p);
                             }
                         } else {
-                            personalPhotos.push(p);
+                            // No face detected - might be a name card
+                            nameCards.push(p);
                         }
                     } catch (err) {
-                        personalPhotos.push(p);
+                        // Error detecting - might be name card
+                        nameCards.push(p);
+                    }
+                }
+
+                log(`${eyePhotos.length} eye photos, ${nameCards.length} potential name cards, ${personalPhotos.length} personal`, 'success');
+
+                // Run OCR on name cards
+                setProgress(45, 'Reading name cards...');
+                for (let i = 0; i < nameCards.length; i++) {
+                    setProgress(45 + (i / nameCards.length) * 15, `OCR ${i+1}/${nameCards.length}`);
+                    try {
+                        const result = await Tesseract.recognize(
+                            nameCards[i].url,
+                            'eng',
+                            { 
+                                logger: () => {} // Suppress verbose logging
+                            }
+                        );
+                        nameCards[i].ocrText = result.data.text.trim();
+                        nameCards[i].patientName = extractPatientName(result.data.text);
+                        log(`OCR: "${nameCards[i].patientName}"`, 'info');
+                    } catch (err) {
+                        nameCards[i].ocrText = '';
+                        nameCards[i].patientName = 'Unknown';
+                        log(`OCR failed for photo ${i+1}`, 'warning');
                     }
                 }
 
@@ -1091,41 +1150,101 @@
 
         function renderStep3() {
             // Update stats
-            document.getElementById('personalCount').textContent = personalPhotos.length;
+            document.getElementById('nameCardsCount').textContent = nameCards.length;
             document.getElementById('patientCountStep3').textContent = patients.length;
 
-            const container = document.getElementById('step3Container');
-            container.innerHTML = '';
+            // Render name cards
+            const nameCardsContainer = document.getElementById('nameCardsContainer');
+            nameCardsContainer.innerHTML = '';
 
-            // Show personal photos folder - EDITABLE so you can drag from it
-            if (personalPhotos.length > 0) {
-                const personalFolder = createFolderElement({
-                    id: 'personal',
-                    name: 'Personal/Vacation Photos',
-                    photos: personalPhotos.map(p => ({ ...p, label: 'Personal', daysSinceBaseline: null })),
-                    isPersonal: true
-                }, true); // true = editable so photos are draggable
-                container.appendChild(personalFolder);
+            if (nameCards.length === 0) {
+                nameCardsContainer.innerHTML = `
+                    <div class="alert" style="background: #fff3cd; border-left-color: #ffc107;">
+                        <strong>No name cards detected.</strong><br>
+                        No text-heavy photos were found. You can manually name patients in the next step.
+                    </div>
+                `;
+            } else {
+                nameCards.forEach((card, idx) => {
+                    const cardDiv = document.createElement('div');
+                    cardDiv.className = 'patient-folder';
+                    cardDiv.style.display = 'flex';
+                    cardDiv.style.alignItems = 'center';
+                    cardDiv.style.gap = '15px';
+                    cardDiv.style.marginBottom = '15px';
+                    
+                    cardDiv.innerHTML = `
+                        <div style="flex-shrink: 0;">
+                            <img src="${card.url}" style="width: 100px; height: 100px; object-fit: cover; border-radius: 8px;">
+                        </div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 14px; color: #8e8e93; margin-bottom: 5px;">Name Card ${idx + 1}</div>
+                            <input type="text" value="${card.patientName}" 
+                                   onchange="nameCards[${idx}].patientName = this.value"
+                                   style="width: 100%; max-width: 300px; padding: 8px; border: 2px solid #007AFF; border-radius: 8px; font-size: 16px; font-weight: 600;">
+                            <div style="font-size: 11px; color: #8e8e93; margin-top: 5px;">OCR: "${card.ocrText.substring(0, 50)}${card.ocrText.length > 50 ? '...' : ''}"</div>
+                        </div>
+                        <div style="flex-shrink: 0;">
+                            <select onchange="assignNameToPatient(${idx}, this.value)" 
+                                    style="padding: 10px; border: 2px solid #34C759; border-radius: 8px; font-size: 14px; font-weight: 600; min-width: 150px;">
+                                <option value="">Assign to...</option>
+                                ${patients.map((p, i) => `<option value="${i}">Patient ${i + 1}</option>`).join('')}
+                            </select>
+                        </div>
+                    `;
+                    nameCardsContainer.appendChild(cardDiv);
+                });
             }
 
-            // Show patient folders - also EDITABLE so you can drag TO them
-            patients.forEach(patient => {
-                const folder = createFolderElement(patient, true);
-                container.appendChild(folder);
+            // Render patient groups
+            const patientGroupsContainer = document.getElementById('patientGroupsContainer');
+            patientGroupsContainer.innerHTML = '';
+
+            patients.forEach((patient, idx) => {
+                const folderDiv = document.createElement('div');
+                folderDiv.className = 'patient-folder';
+                folderDiv.style.marginBottom = '15px';
+                
+                folderDiv.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="folder-emoji">📁</div>
+                        <div>
+                            <div style="font-size: 20px; font-weight: 700;">${patient.name}</div>
+                            <div style="font-size: 14px; color: #8e8e93;">${patient.photos.length} photos</div>
+                        </div>
+                    </div>
+                `;
+                patientGroupsContainer.appendChild(folderDiv);
             });
         }
 
-        function confirmAndDeletePersonal() {
-            if (!confirm(`Delete ${personalPhotos.length} personal photos? This cannot be undone.`)) return;
+        function assignNameToPatient(nameCardIdx, patientIdx) {
+            if (patientIdx === '') return;
             
-            personalPhotos = [];
-            log('Personal photos deleted', 'success');
-            renderStep4();
-            goToStep(4);
+            const nameCard = nameCards[nameCardIdx];
+            const patient = patients[parseInt(patientIdx)];
+            
+            // Assign name to patient
+            patient.name = nameCard.patientName;
+            
+            // Add name card photo to patient's photos
+            patient.photos.unshift({
+                ...nameCard,
+                label: 'Name Card',
+                daysSinceBaseline: -1,
+                isNameCard: true
+            });
+            
+            // Remove from nameCards array
+            nameCards.splice(nameCardIdx, 1);
+            
+            log(`✓ Assigned "${patient.name}" to Patient ${parseInt(patientIdx) + 1}`, 'success');
+            
+            // Re-render
+            renderStep3();
         }
 
-        function keepPersonalPhotos() {
-            log('Keeping personal photos', 'info');
+        function goToStep4() {
             renderStep4();
             goToStep(4);
         }
@@ -1455,8 +1574,82 @@
             a.download = `ophtho-export-${Date.now()}.json`;
             a.click();
             
-            log('✓ Exported', 'success');
+            log('✓ Exported JSON', 'success');
             alert('✅ Results exported successfully!');
+        }
+
+        async function downloadZIP() {
+            if (!window.JSZip) {
+                alert('❌ ZIP library not loaded. Please refresh the page.');
+                return;
+            }
+
+            try {
+                log('Creating ZIP file...', 'info');
+                showMessage('Creating organized photo folders...', 'info');
+
+                const zip = new JSZip();
+                let fileCount = 0;
+
+                // Create folders for each patient
+                for (const patient of patients) {
+                    // Clean patient name for folder (remove invalid chars)
+                    const folderName = patient.name.replace(/[<>:"/\\|?*]/g, '_');
+                    const patientFolder = zip.folder(folderName);
+
+                    // Add each photo to the patient folder
+                    for (const photo of patient.photos) {
+                        // Create filename: Label_OriginalName
+                        const safeLabel = photo.label.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_');
+                        const filename = `${safeLabel}_${photo.name}`;
+
+                        // Fetch the image as blob
+                        const response = await fetch(photo.url);
+                        const blob = await response.blob();
+
+                        // Add to ZIP
+                        patientFolder.file(filename, blob);
+                        fileCount++;
+
+                        log(`Added: ${folderName}/${filename}`, 'info');
+                    }
+                }
+
+                showMessage(`Packaging ${fileCount} photos...`, 'info');
+                log(`Generating ZIP with ${fileCount} files...`, 'info');
+
+                // Generate ZIP file
+                const zipBlob = await zip.generateAsync({ 
+                    type: 'blob',
+                    compression: 'DEFLATE',
+                    compressionOptions: { level: 6 }
+                }, function updateProgress(metadata) {
+                    const percent = metadata.percent.toFixed(0);
+                    showMessage(`Compressing... ${percent}%`, 'info');
+                });
+
+                // Download ZIP
+                const url = URL.createObjectURL(zipBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `OphthoSort_Organized_${Date.now()}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                log('✓ ZIP downloaded successfully!', 'success');
+                showMessage('✅ Download complete! Unzip to see organized folders.', 'success');
+                
+                setTimeout(() => {
+                    alert(`✅ Success!\n\n${fileCount} photos organized into ${patients.length} patient folders.\n\nUnzip the downloaded file to see your organized photos!`);
+                }, 500);
+
+            } catch (error) {
+                log('ERROR creating ZIP: ' + error.message, 'error');
+                alert('❌ Error creating ZIP file. Please try again.');
+                console.error(error);
+            }
         }
 
         function resetAll() {
@@ -1465,6 +1658,7 @@
             photos = [];
             patients = [];
             personalPhotos = [];
+            nameCards = [];
             nextPatientId = 1;
             document.getElementById('previewGrid').innerHTML = '';
             document.getElementById('btnAnalyze').disabled = true;
